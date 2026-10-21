@@ -1,0 +1,29 @@
+# Frameflow Film
+
+> Turn a product brief into a finished ad video through the AI Video Platform API.
+> Agents submit jobs, humans approve paid generation, then agents poll until delivered.
+
+## Entry point for agents
+
+- [Agent onboarding (start here)](https://silentgenesislab.github.io/frameflow-film-skill/agent.md): auth, order, poll, approval rules, error codes, costs
+- [Human guide](https://silentgenesislab.github.io/frameflow-film-skill/): installation and end-to-end walkthrough
+
+## API
+
+- Base URL: https://aivideo.sligenai.cn
+- OpenAPI: https://aivideo.sligenai.cn/api/v1/openapi.json
+- Full contract: https://raw.githubusercontent.com/SilentGenesisLab/frameflow-film-skill/main/frameflow-film/references/api.md
+
+## Skill and CLI
+
+- Skill definition: https://raw.githubusercontent.com/SilentGenesisLab/frameflow-film-skill/main/frameflow-film/SKILL.md
+- CLI source: https://raw.githubusercontent.com/SilentGenesisLab/frameflow-film-skill/main/frameflow-film/scripts/film.py
+- Download bundle: https://raw.githubusercontent.com/SilentGenesisLab/frameflow-film-skill/main/dist/frameflow-film-skill.zip
+- Repository: https://github.com/SilentGenesisLab/frameflow-film-skill
+
+## Rules
+
+- An Agent Key with read + write + generate is required. Ask a human for it.
+- Never approve a job. Approval is a human action and returns 403 for Agent Keys.
+- Ordering and storyboarding are free; paid generation starts only after human approval.
+- HTTP 402 means insufficient credits: stop and ask an administrator.
