@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frameflow Film Skill 使用说明</title>
+<style>
+  :root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e3e3e7; --bg:#fafafa; --code:#f2f2f5; --accent:#0b62d6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#ececf1; --muted:#9a9aa2; --line:#2c2c31; --bg:#141416; --code:#1e1e23; --accent:#6ea8ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+    font:16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  main { max-width:780px; margin:0 auto; padding:56px 22px 96px; }
+  h1 { font-size:30px; line-height:1.25; margin:0 0 8px; letter-spacing:-.02em; }
+  h2 { font-size:20px; margin:44px 0 12px; padding-top:18px; border-top:1px solid var(--line); }
+  h3 { font-size:16px; margin:24px 0 8px; }
+  p, li { color:var(--fg); }
+  .lead { color:var(--muted); font-size:17px; margin:0 0 28px; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code { background:var(--code); padding:2px 6px; border-radius:5px; font-size:14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  pre { background:var(--code); padding:14px 16px; border-radius:8px; overflow:auto; }
+  pre code { background:none; padding:0; font-size:13.5px; line-height:1.6; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:15px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .note { border-left:3px solid var(--accent); padding:2px 0 2px 14px; color:var(--muted); margin:16px 0; }
+  .box { border:1px solid var(--line); border-radius:10px; padding:18px 20px; margin:18px 0; background:var(--bg); }
+  ol, ul { padding-left:22px; }
+  footer { margin-top:56px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Frameflow Film Skill</h1>
+  <p class="lead">把一段产品描述做成一条可投放的广告短片：分镜、分段生成、拼接、配乐、配音、混剪、调色、终检，最后输出 MP4。这份说明面向第一次使用的协作者。</p>
+
+  <div class="box">
+    <strong>先记住两条</strong>
+    <ul>
+      <li>下单和分镜<strong>不花钱</strong>；只有人在网页里点了确认，才开始调用付费模型。</li>
+      <li>审批只能由<strong>人类登录网页</strong>完成。Agent Key 调审批固定 403，这不是故障。</li>
+    </ul>
+  </div>
+
+  <h2>1. 下载</h2>
+  <p>需要 Python 3.8 以上，脚本只用标准库，不用安装依赖。</p>
+<pre><code>git clone https://github.com/SilentGenesisLab/frameflow-film-skill.git
+cd frameflow-film-skill/frameflow-film</code></pre>
+  <p>不方便用 git 就下载打包版：
+    <a href="https://github.com/SilentGenesisLab/frameflow-film-skill/raw/main/dist/frameflow-film-skill.zip">frameflow-film-skill.zip</a>。</p>
+
+  <h3>装成 Claude Code Skill（可选）</h3>
+<pre><code>mkdir -p ~/.claude/skills
+cp -r frameflow-film ~/.claude/skills/</code></pre>
+  <p>之后在 Claude Code 里说「用 Frameflow 出一条产品片」即可触发。</p>
+
+  <h2>2. 准备账号和 Key</h2>
+  <ol>
+    <li>打开 <a href="https://aivideo.sligenai.cn">aivideo.sligenai.cn</a> 注册或登录。任务按团队隔离。</li>
+    <li>想共用产品图和积分，就让管理员用<strong>团队邀请</strong>把你加进去。自己注册会新建空团队，默认 <strong>0 积分</strong>，出片会返回 402。</li>
+    <li>在团队/账号页创建「Agent 访问密钥」，勾选 <code>read</code> + <code>write</code> + <code>generate</code>。Key 只显示一次，不要发群里或提交仓库。</li>
+    <li>准备至少 1 张、最多 3 张公网可读的 <strong>https 直链</strong>参考图。没有直链就先上传到平台产品库，下单时用 <code>--product-id</code> 或 <code>--conversation-id</code>。</li>
+  </ol>
+
+  <h2>3. 写入凭据并自检</h2>
+<pre><code>python scripts/film.py setup
+python scripts/film.py doctor</code></pre>
+  <p><code>setup</code> 会交互询问平台地址和 Key，写到 <code>~/.config/aivideo/credentials</code>（权限 600），不会进 shell 历史。也可以改用环境变量：</p>
+<pre><code>export AIVIDEO_BASE_URL=https://aivideo.sligenai.cn
+export AIVIDEO_API_KEY=你的Key</code></pre>
+  <p><code>doctor</code> 会打印团队、Key 类型和 scopes。看到 <code>can_create: true</code> 就能下单；缺 scope 回平台补权限。</p>
+  <p class="note">显示 <code>type: agent</code> 是正常的：Agent Key 负责下单和查进度，审批由人完成。</p>
+
+  <h2>4. 出一条片</h2>
+  <h3>写 brief</h3>
+  <p>写清四件事，别的都是噪音：产品是什么、给谁用、必须出现哪些画面、一句说结果的卖点。不要写参数、认证、销量、疗效，分镜模型会照抄。</p>
+<pre><code>晨研 Mini 是给通勤族用的便携咖啡机，30 秒出浓缩。
+要拍出按键、出液、手表计时、端着走的画面，强调小和快。</code></pre>
+
+  <h3>下单</h3>
+<pre><code>python scripts/film.py create \
+  --brief-file brief.txt \
+  --title "晨研 Mini 产品片" \
+  --product "晨研 Mini" \
+  --seconds 30 --ratio 9:16 \
+  --ref https://example.com/pack.jpg</code></pre>
+  <p>返回里的 <code>id</code>（UUID）才是平台任务 ID；<code>pipelineJobId</code> 是流水线内部编号，别拿来查状态。</p>
+
+  <h3>等人批准</h3>
+<pre><code>python scripts/film.py status &lt;平台任务ID&gt;</code></pre>
+  <p><code>planning</code> 表示分镜还没出完；<code>awaiting_approval</code> 或 <code>pending_approval</code> 都表示在等人批。批准入口：登录平台 →「创作搭档」→ 待确认卡片 → 确认。</p>
+
+  <h3>跟踪到成片</h3>
+<pre><code>python scripts/film.py watch &lt;平台任务ID&gt; --interval 30 --timeout 5400</code></pre>
+  <p>到 <code>delivered</code> / <code>failed</code> / <code>rejected</code> 自动停止。进度看 <code>units_done / unit_count</code>，成片看 <code>result_url</code>，合格与否看 <code>qc.passed</code>。</p>
+
+  <h2>5. 费用</h2>
+  <table>
+    <tr><th>阶段</th><th>是否计费</th></tr>
+    <tr><td>下单、分镜、等待审批</td><td>0 元</td></tr>
+    <tr><td>批准之后</td><td>按生成单元计费，40 秒片约 3 个单元</td></tr>
+  </table>
+  <p><code>402</code> = 个人积分不足，停下别重试，让管理员分配后再提交。</p>
+
+  <h2>6. 常见错误</h2>
+  <table>
+    <tr><th>码</th><th>含义与处理</th></tr>
+    <tr><td>401</td><td>Key 无效或没配置，重新跑 <code>setup</code> 和 <code>doctor</code></td></tr>
+    <tr><td>402</td><td>积分不足，找管理员分配</td></tr>
+    <tr><td>403</td><td>scope 不足，或试图用 Agent Key 审批</td></tr>
+    <tr><td>404</td><td>任务不存在，或不属于当前团队</td></tr>
+    <tr><td>409</td><td>任务已处置，先查最新状态</td></tr>
+    <tr><td>422</td><td>参数不合法，最常见是缺参考图</td></tr>
+    <tr><td>503</td><td>平台流水线未配置，联系管理员</td></tr>
+  </table>
+
+  <h2>7. 限制</h2>
+  <ul>
+    <li>成片 720p、24 fps。</li>
+    <li>配乐由 Suno 自动生成，配音为固定音色。</li>
+    <li>没有配乐时会跳过后期重剪，直接交付拼接片，此时 <code>qc.applied = false</code>。</li>
+    <li>只从零生成画面，不复用实拍素材。</li>
+  </ul>
+
+  <footer>
+    仓库：<a href="https://github.com/SilentGenesisLab/frameflow-film-skill">SilentGenesisLab/frameflow-film-skill</a><br>
+    接口契约见仓库内 <code>frameflow-film/references/api.md</code>。页面不含任何密钥。
+  </footer>
+</main>
+</body>
+</html>
