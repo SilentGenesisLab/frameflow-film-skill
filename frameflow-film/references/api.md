@@ -27,7 +27,7 @@
 |---|---|---|---|
 | `POST` | `/api/v1/film-jobs` | API Key / 人类会话 | 下单，返回平台任务 ID 与流水线 ID |
 | `GET` | `/api/v1/film-jobs/{id}` | API Key / 人类会话 | 查进度、逐段状态、成片地址、质检报告 |
-| `POST` | `/api/v1/film-jobs/{id}/approve` | **仅人类会话** | 批准，立刻开始付费生成 |
+| `POST` | `/api/v1/film-jobs/{id}/approve` | API Key / 人类会话 | 批准，立刻开始付费生成 |
 
 `{id}` 是**平台任务 ID**（UUID），不是流水线内部的 `FF-YYYYMMDD-XXXXXX`。响应里的 `pipelineJobId` 才是后者。
 
@@ -40,7 +40,7 @@ Authorization: Bearer <AIVIDEO_API_KEY>
 ```
 
 - 下单需要 `write` + `generate` 两个 scope。
-- 审批走 `requireHuman`，**Agent Key 一律 403**，这是设计而非缺陷；没有绕过方式。
+- 审批同样需要 `write` + `generate`。审批即付费，Agent Key 调用前应先向用户报清单元数与花费。
 - Key 绑定团队，创建的任务只在该团队可见。
 
 ### 客户端配置
@@ -140,11 +140,11 @@ Authorization: Bearer <AIVIDEO_API_KEY>
 
 `POST /api/v1/film-jobs/{id}/approve`，请求体 `{}`。
 
-- 只有 `status === "pending_approval"` 能批，否则 `409 该任务已处置`。
+- 只有流水线真的停在 `awaiting_approval` 才能批，否则 `409`，错误信息里带 n8n 返回的实际状态（例如「该任务当前状态是『planning』…」）。看到 `409` 就回去 `GET` 状态，别重试。
 - 平台内部完成审批签名，调用方不接触任何签名密钥。
 - 批准瞬间转入 `generating`，开始调用付费视频模型。
 
-**调用方必须把审批交给人**：Agent 拿到 `status: pending_approval` 就停下来，把 `pipelineJobId`、分镜摘要、预计单元数报给用户，由人在平台界面确认。入口是登录后的「创作搭档」里那张待确认卡片；也可以用人类登录会话直接调本端点。Agent Key 一律 403。
+**审批即付费，先问用户。** Agent 拿到 `awaiting_approval` 后把 `pipelineJobId`、分镜摘要、预计单元数报给用户，拿到明确同意再调本端点；用户已整段授权（「直接出片」）时才自行批准。人类也可以在平台「创作搭档」的待确认卡片上确认。
 
 ---
 

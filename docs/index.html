@@ -49,8 +49,8 @@
   <div class="box">
     <strong>先记住两条</strong>
     <ul>
-      <li>下单和分镜<strong>不花钱</strong>；只有人在网页里点了确认，才开始调用付费模型。</li>
-      <li>审批只能由<strong>人类登录网页</strong>完成。Agent Key 调审批固定 403，这不是故障。</li>
+      <li>下单和分镜<strong>不花钱</strong>；只有批准之后，才开始调用付费模型。</li>
+      <li>审批就是付费。Agent Key 有 <code>write + generate</code> 就能批，但要先把单元数和花费报给用户、拿到同意。</li>
     </ul>
   </div>
 
@@ -81,7 +81,7 @@ python scripts/film.py doctor</code></pre>
 <pre><code>export AIVIDEO_BASE_URL=https://aivideo.sligenai.cn
 export AIVIDEO_API_KEY=你的Key</code></pre>
   <p><code>doctor</code> 会打印团队、Key 类型和 scopes。看到 <code>can_create: true</code> 就能下单；缺 scope 回平台补权限。</p>
-  <p class="note">显示 <code>type: agent</code> 是正常的：Agent Key 负责下单和查进度，审批由人完成。</p>
+  <p class="note">显示 <code>type: agent</code> 是正常的：Agent Key 负责下单、查进度，也可以在用户同意后审批。</p>
 
   <h2>4. 出一条片</h2>
   <h3>写 brief</h3>
@@ -110,7 +110,7 @@ export AIVIDEO_API_KEY=你的Key</code></pre>
   <table>
     <tr><th>阶段</th><th>是否计费</th></tr>
     <tr><td>下单、分镜、等待审批</td><td>0 元</td></tr>
-    <tr><td>批准之后</td><td>按生成单元计费，40 秒片约 3 个单元</td></tr>
+    <tr><td>批准之后</td><td>按生成单元计费，40 秒片约 4 个单元（每段 8~13 秒）</td></tr>
   </table>
   <p><code>402</code> = 个人积分不足，停下别重试，让管理员分配后再提交。</p>
 
@@ -119,7 +119,7 @@ export AIVIDEO_API_KEY=你的Key</code></pre>
     <tr><th>码</th><th>含义与处理</th></tr>
     <tr><td>401</td><td>Key 无效或没配置，重新跑 <code>setup</code> 和 <code>doctor</code></td></tr>
     <tr><td>402</td><td>积分不足，找管理员分配</td></tr>
-    <tr><td>403</td><td>scope 不足，或试图用 Agent Key 审批</td></tr>
+    <tr><td>403</td><td>scope 不足（下单和审批都需要 <code>write + generate</code>）</td></tr>
     <tr><td>404</td><td>任务不存在，或不属于当前团队</td></tr>
     <tr><td>409</td><td>任务已处置，先查最新状态</td></tr>
     <tr><td>422</td><td>参数不合法，最常见是缺参考图</td></tr>

@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """Frameflow Film 出片流水线的命令行入口。
 
-只做四件事：下单、查状态、轮询到终态、拒绝代替人类审批。
+只做四件事：下单、查状态、轮询到终态、审批。
 凭据从环境变量或 ~/.config/aivideo/credentials 读取，不接受命令行传入。
+审批即付费：脚本不会替你判断该不该批，调用前先向用户报清单元数与花费。
 """
 import argparse
 import getpass
@@ -21,8 +22,8 @@ TERMINAL = {"delivered", "failed", "rejected"}
 HINTS = {
     401: "Key 无效或未配置：运行 python scripts/film.py setup",
     402: "积分不足：到平台充值后再提交，任务不会自动重试",
-    403: "权限不足：Key 需要 read+write+generate；审批只能由人类登录会话发起",
-    409: "任务已处置：先 status 看最新状态",
+    403: "权限不足：Key 需要 read+write+generate，审批同样需要 write+generate",
+    409: "流水线还没停在 awaiting_approval（多半还在 planning）：先 status 看最新状态，别重试",
     422: "参数不合法：最常见是缺少参考图（--ref 或 --product-id）",
     429: "限流：稍后重试",
     503: "流水线未配置：联系平台管理员",
@@ -108,7 +109,7 @@ def cmd_create(a):
         return 2
     print("\n任务已受理，停在 pending_approval，**尚未产生费用**。", file=sys.stderr)
     print("幂等键：%s（同一请求重试时原样传回 --idempotency-key）" % key, file=sys.stderr)
-    print("下一步：把分镜和单元数报给用户，等人到平台界面批准。", file=sys.stderr)
+    print("下一步：把分镜和单元数报给用户，同意后 approve 或让用户到平台确认。", file=sys.stderr)
     return 0
 
 
@@ -230,20 +231,28 @@ def cmd_doctor(a):
         "team": out.get("teamName"),
         "scopes": scopes,
         "can_create": not missing,
+        "can_approve": not missing,
     }, ensure_ascii=False, indent=1))
     if missing:
         print("缺少 scope：%s" % "、".join(missing), file=sys.stderr)
         return 3
     if out.get("type") != "human":
-        print("这是 Agent Key：可以下单，不能审批。", file=sys.stderr)
-    print("就绪。审批请由人类登录网页，在「创作搭档」里确认待批任务。", file=sys.stderr)
+        print("这是 Agent Key：可以下单和审批，审批前先向用户报清单元数与花费。",
+              file=sys.stderr)
+    print("就绪。审批也可以在平台「创作搭档」的待确认卡片上点。", file=sys.stderr)
     return 0
 
 
 def cmd_approve(a):
-    print("审批只能由人类会话发起：平台对 Agent Key 返回 403，这是设计。", file=sys.stderr)
-    print("请让用户到平台界面确认任务 %s。" % a.id, file=sys.stderr)
-    return 4
+    jid = job_id(a.id)
+    code, out = call("POST", "/api/v1/film-jobs/%s/approve" % jid, {}, a.no_proxy)
+    print(json.dumps(out, ensure_ascii=False, indent=1))
+    if code != 200:
+        hint(code)
+        return 2
+    print("\n已批准：从这一刻起逐段生成并计费。", file=sys.stderr)
+    print("下一步：python scripts/film.py watch %s" % jid, file=sys.stderr)
+    return 0
 
 
 def main():
@@ -286,7 +295,7 @@ def main():
     w.add_argument("--timeout", type=int, default=5400)
     w.set_defaults(func=cmd_watch)
 
-    ap = sub.add_parser("approve", help="说明为什么这里不能审批")
+    ap = sub.add_parser("approve", help="批准并开始付费生成（先问过用户）")
     ap.add_argument("id")
     ap.set_defaults(func=cmd_approve)
 

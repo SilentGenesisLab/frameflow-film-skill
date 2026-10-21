@@ -6,10 +6,11 @@ user-invocable: true
 
 # Frameflow Film 出片
 
-一段 `brief` → 分镜 → 3 个左右视频单元 → 拼接 → 配乐 → 配音/混剪/调色/终检 → 成片。
+一段 `brief` → 分镜 → 若干视频单元（每段 8~13 秒、含 2 个以上镜头）→ 拼接 → 配乐 → 配音/混剪/调色/终检 → 成片。
 
-**唯一铁律：审批只能人类做。** 下单不花钱，任务停在待确认；批准之后才调付费模型。
-Agent Key 调审批固定 403，不要找绕过方式，也不要把签名算出来自己用。
+**审批 = 开始花钱。** 下单不花钱，任务停在待确认；批准之后才调付费模型。
+Agent Key 有 `generate` 权限就可以调审批（`film.py approve`），但**先把分镜、单元数、预计花费报给用户，
+拿到明确同意再批**。用户已经整段授权（「直接出片，不用再问我」）时才自行批准。
 
 ---
 
@@ -42,7 +43,7 @@ Agent Key 调审批固定 403，不要找绕过方式，也不要把签名算出
    没有直链时，先在平台把图传到产品库或会话里，下单时用 `--product-id` / `--conversation-id`。
    三者都没有图 → `422`，不会开工。
 
-> `doctor` 显示 `type: agent` 是正常的：Agent Key 负责下单和查进度，审批必须由人类登录网页完成。
+> `doctor` 显示 `type: agent` 是正常的：Agent Key 负责下单、查进度，也可以在用户同意后审批。
 
 ---
 
@@ -52,7 +53,7 @@ Agent Key 调审批固定 403，不要找绕过方式，也不要把签名算出
 python scripts/film.py create --brief-file brief.txt --title "片名" --product "产品名" --seconds 40 --ratio 16:9 --ref https://.../pack.jpg
 python scripts/film.py status <平台任务ID>
 python scripts/film.py watch  <平台任务ID> --interval 30 --timeout 5400
-python scripts/film.py approve <平台任务ID>   # 只打印为什么不能批
+python scripts/film.py approve <平台任务ID>  # 批准并开始付费生成（先问过用户）
 ```
 
 `<平台任务ID>` 是 `create` 返回的 `id`（UUID），**不是** `FF-YYYYMMDD-XXXXXX` 那个
@@ -70,8 +71,9 @@ python scripts/film.py approve <平台任务ID>   # 只打印为什么不能批
 3. `status` 轮询：`planning` 表示分镜还没出完；看到 `awaiting_approval`（或兼容写法
    `pending_approval`）就停下来找人批。`create` 响应里的 `pending_approval` 是平台本地状态，
    不能据此认为分镜已完成。
-4. **停下来找用户批准**。把分镜、单元数、预计花费讲清楚。不批就不往下走。
-   批准入口：登录平台 →「创作搭档」→ 待确认卡片 → 确认。
+4. **先向用户报告再批准**。把分镜、单元数、预计花费讲清楚，拿到明确同意后调
+   `approve <平台任务ID>`。用户不在场又没预先授权时，就停在这里等。
+   用户也可以自己在平台「创作搭档」的待确认卡片上点确认。
 5. 批准后 `watch` 到终态。`units_done / unit_count` 是唯一可信的进度。
 6. 交付时给 `result_url`，并把 `qc` 里 `checks` 逐条念出来——`passed: true` 才算合格。
 
@@ -80,7 +82,7 @@ python scripts/film.py approve <平台任务ID>   # 只打印为什么不能批
 ## 费用
 
 - 下单和分镜不扣费；**点确认的瞬间开始调付费模型**。
-- 40 秒片约 3 个单元，就是 3 次付费视频请求；费用按单元计。
+- 40 秒片约 4 个单元（每段 8~13 秒），就是 4 次付费视频请求；费用按单元计。
 - 新注册团队/新成员默认 0 积分，先由管理员分配；`402` = 个人积分不足，停下别重试，充值后再提交。
 
 ---
@@ -138,7 +140,7 @@ planning → awaiting_approval → approved → generating → assembling → po
 
 1. 对方注册账号，由团队管理员给他建一个带 `read + write + generate` 的 Agent Key；
 2. 跑 `python scripts/film.py setup`，再跑 `doctor`；
-3. 按上面的流程下单，审批仍由人在网页里点。
+3. 按上面的流程下单；审批在用户确认后由人或 Agent Key 调 `approve` 完成。
 
 不需要装依赖，不需要连你的机器，不需要改脚本。
 凭据优先级：环境变量 > `AIVIDEO_CREDENTIALS` 指向的文件 > `~/.config/aivideo/credentials`。

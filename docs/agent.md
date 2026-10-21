@@ -4,12 +4,12 @@
 > 平台地址：`https://aivideo.sligenai.cn`
 > 机器可读契约：`GET https://aivideo.sligenai.cn/api/v1/openapi.json`
 
-你的目标：把一段产品描述提交为出片任务，等人类批准，然后跟踪到成片。
+你的目标：把一段产品描述提交为出片任务，拿到用户对分镜和花费的同意后批准，然后跟踪到成片。
 
 **两条硬规则**
 
-1. 审批只能由人类完成。你不能调用审批接口，也不要尝试伪造签名。Agent Key 调审批固定 403。
-2. 下单和分镜不产生费用；人类点确认后才开始调用付费模型。不要为了“推进流程”替人确认。
+1. 审批就是付费。你（Agent Key）可以调审批接口，但必须先向用户报清分镜、`unit_count` 和预计花费，拿到明确同意再批；用户已经整段授权（「直接出片，不用再问我」）时才自行批准。
+2. 下单和分镜不产生费用；批准之后才开始调用付费模型。不要为了“推进流程”偷偷批准。
 
 ---
 
@@ -84,13 +84,26 @@ curl -sS https://aivideo.sligenai.cn/api/v1/film-jobs/<id> \
 | status | 你的动作 |
 |---|---|
 | `planning` | 继续等，分镜还没出完 |
-| `awaiting_approval` 或 `pending_approval` | **停下**，把分镜摘要、`unit_count`、预计费用报给人类，请他去平台「创作搭档」点确认 |
+| `awaiting_approval` 或 `pending_approval` | **停下**，把分镜摘要、`unit_count`、预计费用报给用户；得到同意后批准（见下） |
 | `approved` / `generating` | 人类已批准，继续轮询 |
 | `assembling` / `posting` | 继续轮询 |
 | `delivered` | 完成，读取 `result_url` 和 `qc` |
 | `failed` / `rejected` | 停止，把 `error` 报给人类 |
 
 建议 30 秒一次，总超时 90 分钟。
+
+## 3.1 审批（用户同意后）
+
+```bash
+curl -sS -X POST https://aivideo.sligenai.cn/api/v1/film-jobs/<id>/approve \
+  -H "Authorization: Bearer $AIVIDEO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+- 需要 `write` + `generate`。批准后立刻转入 `generating`，开始计费。
+- 只有流水线真的停在 `awaiting_approval` 才能批，否则 `409`，错误信息里带 n8n 返回的实际状态（例如「该任务当前状态是『planning』…」）。看到 409 就回去查状态，不要重试。
+- 用户也可以登录平台，在「创作搭档」的待确认卡片上点确认。
 
 ## 4. 交付
 
@@ -102,7 +115,7 @@ curl -sS https://aivideo.sligenai.cn/api/v1/film-jobs/<id> \
 ## 5. 费用
 
 - 下单、分镜、等待批准：0 元。
-- 批准后按生成单元计费，40 秒片约 3 个单元。
+- 批准后按生成单元计费，40 秒片约 4 个单元（每段 8~13 秒）。
 - `402` 表示积分不足：停下，不要重试，让管理员分配积分后重新提交。
 
 ## 6. 错误码
@@ -112,9 +125,9 @@ curl -sS https://aivideo.sligenai.cn/api/v1/film-jobs/<id> \
 | 400 | 缺 `Idempotency-Key` 或 JSON 不合法 |
 | 401 | Key 无效，向人类重新索取 |
 | 402 | 积分不足，停下等人分配 |
-| 403 | scope 不足；或你在尝试审批（不允许） |
+| 403 | scope 不足（下单和审批都需要 `write` + `generate`） |
 | 404 | 任务不存在或不属于本团队 |
-| 409 | 任务已处置，重新查状态 |
+| 409 | 流水线还没停在 `awaiting_approval`，或任务已处置；重新查状态 |
 | 422 | 参数不合法，最常见是缺参考图 |
 | 429 | 限流，退避重试 |
 | 502 | 流水线受理/读取失败，稍后重试 |
